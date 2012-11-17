@@ -9,11 +9,12 @@
 				   (setf position (second result))))))
 
 (defun process (command memory position)
-  (cond
-   ((char= command #\<) (decf position))
-   ((char= command #\>) (incf position))
-   ((char= command #\+) (incf (aref memory position)))
-   ((char= command #\-) (decf (aref memory position)))
-   ((char= command #\.) (print (aref memory position))))
+  (let ((memory (copy-array memory)))
+    (cond
+     ((char= command #\<) (decf position))
+     ((char= command #\>) (incf position))
+     ((char= command #\+) (incf (aref memory position)))
+     ((char= command #\-) (decf (aref memory position)))
+     ((char= command #\.) (print (aref memory position)))))
   (list memory position))
     
