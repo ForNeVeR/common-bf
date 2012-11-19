@@ -1,37 +1,91 @@
-(defun new-memory ()
-  (make-array 256 :initial-element 0))
+;;; Memory.
+(defparameter *memory-size* 256)
 
-(defun get-memory (memory position)
+(defun new-memory ()
+  (make-array *memory-size* :initial-element 0))
+
+(defun memory-get (memory position)
   (aref memory position))
 
-(defun set-memory (memory position value)
-  (let ((memory (make-array 256 :initial-contents memory)))
+(defun memory-set (memory position value)
+  (let ((memory (make-array *memory-size* :initial-contents memory)))
     (setf (aref memory position) value)
     memory))
 
+;;; Stack.
+(defun new-stack ()
+  '())
+
+(defun stack-push (stack value)
+  (cons value stack))
+
+(defun stack-peek (stack)
+  (car stack))
+
+(defun stack-pop (stack)
+  (cdr stack))
+
+;;; State.
+(defstruct bf-state memory pointer position stack)
+
+(defun new-state ()
+  (make-bf-state :memory (new-memory)
+		 :pointer 0
+		 :position 0
+		 :stack (new-stack)))
+
+;;; Source.
+(defun source-get (source index)
+  (char source index))
+
 (defun bf (source)
-  (let ((memory (new-memory))
-	(position 0))
-    (loop for c across source do (let ((result (process c memory position)))
-				   (setf memory (first result))
-				   (setf position (second result))))))
+  (let ((state (new-state)))
+    (loop do (let ((command (source-get source (bf-state-position state))))
+	       (setf state (process command state))
+	       (if (>= (bf-state-position state) (length source))
+		   (return state))))))
 
-(defun process (command memory position)
-  ;; Side effects first:
-  (cond 
-   ((char= command #\.) (print (aref memory position))))
-
-  ;; Now - memory and position:
-  (let ((new-position (cond
-		       ((char= command #\<) (- position 1))
-		       ((char= command #\>) (+ position 1))
-		       (t position)))
-	(new-memory (let* ((value (get-memory memory position))
-			   (new-value (cond
-				       ((char= command #\+) (+ value 1))
-				       ((char= command #\-) (- value 1))
-				       (t value))))
-		      (set-memory memory position new-value))))
-
-    ;; Return changed values:
-    (list new-memory new-position)))
+(defun process (command state)
+  (let ((state (copy-bf-state state)))
+    (cond
+     ((char= command #\<)
+      (decf (bf-state-pointer state)))
+     ((char= command #\>)
+      (incf (bf-state-pointer state)))
+     ((char= command #\-)
+      (setf (bf-state-memory state)
+	    (memory-set (bf-state-memory state)
+			(bf-state-pointer state)
+			(- (memory-get (bf-state-memory state)
+				       (bf-state-pointer state))
+			   1))))
+     ((char= command #\+)
+      (setf (bf-state-memory state)
+	    (memory-set (bf-state-memory state)
+			(bf-state-pointer state)
+			(+ (memory-get (bf-state-memory state)
+				       (bf-state-pointer state))
+			   1))))
+     ((char= command #\[)
+      (setf (bf-state-stack state)
+	    (stack-push (bf-state-stack state)
+			(bf-state-position state))))
+     ((char= command #\])
+      (if (> (memory-get (bf-state-memory state)
+			 (bf-state-pointer state))
+	     0)
+	  (setf (bf-state-position state)
+		(stack-peek (bf-state-stack state)))
+	(setf (bf-state-stack state)
+	      (stack-pop (bf-state-stack state)))))
+     ((char= command #\,)
+      (let ((character (char-code (read-char))))
+	(setf (bf-state-memory state)
+	      (memory-set (bf-state-memory state)
+			  (bf-state-pointer state)
+			  character))))
+     ((char= command #\.)
+      (write-char (code-char (memory-get (bf-state-memory state)
+					 (bf-state-pointer state))))))
+    (incf (bf-state-position state))
+    state))
